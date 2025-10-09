@@ -10,7 +10,6 @@ void main() {
       final tempDir = await Directory.systemTemp.createTemp(
         'pigeon_gen_cli_test_',
       );
-      // Ensure parent_package and child_package directories exist
       final parentPackageDir = Directory(
         p.join(tempDir.path, 'parent_package'),
       );
@@ -19,6 +18,10 @@ void main() {
         p.join(parentPackageDir.path, 'child_package'),
       );
       await childPackageDir.create(recursive: true);
+
+      addTearDown(() async {
+        await tempDir.delete(recursive: true);
+      });
 
       File(
         p.join(parentPackageDir.path, 'pubspec.yaml'),
@@ -32,8 +35,6 @@ version: 1.0.0
       Directory.current = tempDir.path;
       final parentPackageName = getPackageNameByPath(file.path);
       expect(parentPackageName, 'my_package');
-
-      await tempDir.delete(recursive: true);
     });
   });
   group('getCurrentPackageName', () {
@@ -41,6 +42,10 @@ version: 1.0.0
       final tempDir = await Directory.systemTemp.createTemp(
         'pigeon_gen_cli_test_',
       );
+      addTearDown(() async {
+        await tempDir.delete(recursive: true);
+      });
+
       File(
         p.join(tempDir.path, 'pubspec.yaml'),
       ).writeAsStringSync('''
@@ -53,14 +58,16 @@ dependencies:
       Directory.current = tempDir.path;
       final currentPackageName = getCurrentPackageName();
       expect(currentPackageName, 'my_package');
-
-      await tempDir.delete(recursive: true);
     });
 
     test('throws an error if the pubspec.yaml is not found', () async {
       final tempDir = await Directory.systemTemp.createTemp(
         'pigeon_gen_cli_test_',
       );
+      addTearDown(() async {
+        await tempDir.delete(recursive: true);
+      });
+
       Directory.current = tempDir.path;
       expect(
         getCurrentPackageName,
@@ -72,7 +79,6 @@ dependencies:
           ),
         ),
       );
-      await tempDir.delete(recursive: true);
     });
   });
 }

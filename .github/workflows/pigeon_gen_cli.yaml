@@ -1,0 +1,25 @@
+name: pigeon_gen_cli
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pigeon_gen_cli/**'
+      - '.github/workflows/pigeon_gen_cli.yaml'
+  pull_request:
+    paths:
+      - 'pigeon_gen_cli/**'
+      - '.github/workflows/pigeon_gen_cli.yaml'
+
+jobs:
+  build:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1
+    with:
+      working_directory: pigeon_gen_cli
+      test_optimization: false
+

@@ -4,30 +4,34 @@ import 'package:path/path.dart' as p;
 import 'package:pigeon_gen_cli/src/commands/generate/utils/load_package_roots.dart';
 import 'package:test/test.dart';
 
+// TODO(matiasleyba): fix or find a better way to handle flaky tests,
+// randomize order: 683288169
 void main() {
   group('loadPackageRoots', () {
     test('throws when .dart_tool/package_config.json is missing', () async {
       final originalCwd = Directory.current.path;
       final tempDir = await Directory.systemTemp.createTemp(
-        'pigeon_gen_cli_test_',
+        'pigeon_gen_cli_test',
       );
-      try {
-        Directory.current = tempDir.path;
-
-        expect(
-          loadPackageRoots,
-          throwsA(
-            isA<Exception>().having(
-              (e) => e.toString(),
-              'message',
-              contains('package_config.json not found'),
-            ),
-          ),
-        );
-      } finally {
+      addTearDown(() async {
         Directory.current = originalCwd;
         await tempDir.delete(recursive: true);
-      }
+      });
+
+      tempDir.createSync(recursive: true);
+
+      Directory.current = tempDir.path;
+
+      expect(
+        loadPackageRoots,
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('package_config.json not found'),
+          ),
+        ),
+      );
     });
 
     test(
@@ -35,25 +39,33 @@ void main() {
       () async {
         final originalCwd = Directory.current.path;
         final cwd = await Directory.systemTemp.createTemp(
-          'pigeon_gen_cli_test_',
+          'pigeon_gen_cli_test',
         );
         final absDir = await Directory.systemTemp.createTemp(
-          'pigeon_gen_cli_abs_',
+          'pigeon_gen_cli_abst',
         );
 
-        try {
-          // Prepare fake package_config.json
-          final dotDartTool = Directory(p.join(cwd.path, '.dart_tool'))
-            ..createSync(recursive: true);
-          final configFile = File(
-            p.join(dotDartTool.path, 'package_config.json'),
-          );
+        absDir.createSync(recursive: true);
+        cwd.createSync(recursive: true);
 
-          final absoluteUri = Uri.file(absDir.path).toString();
-          const relativeUri = '../../relative_root';
+        addTearDown(() async {
+          Directory.current = originalCwd;
+          await cwd.delete(recursive: true);
+          await absDir.delete(recursive: true);
+        });
 
-          final json =
-              '''
+        // Prepare fake package_config.json
+        final dotDartTool = Directory(p.join(cwd.path, '.dart_tool'))
+          ..createSync(recursive: true);
+        final configFile = File(
+          p.join(dotDartTool.path, 'package_config.json'),
+        );
+
+        final absoluteUri = Uri.file(absDir.path).toString();
+        const relativeUri = '../../relative_root';
+
+        final json =
+            '''
 {
   "packages": [
     { "name": "absolute_pkg", "rootUri": "$absoluteUri" },
@@ -61,20 +73,15 @@ void main() {
   ]
 }
 ''';
-          configFile.writeAsStringSync(json);
+        configFile.writeAsStringSync(json);
 
-          Directory.current = cwd.path;
+        Directory.current = cwd.path;
 
-          final result = loadPackageRoots();
+        final result = loadPackageRoots();
 
-          expect(result.length, 2);
-          expect(result['absolute_pkg'], absDir.path);
-          expect(result['relative_pkg'], '../relative_root');
-        } finally {
-          Directory.current = originalCwd;
-          await cwd.delete(recursive: true);
-          await absDir.delete(recursive: true);
-        }
+        expect(result.length, 2);
+        expect(result['absolute_pkg'], absDir.path);
+        expect(result['relative_pkg'], '../relative_root');
       },
     );
   });

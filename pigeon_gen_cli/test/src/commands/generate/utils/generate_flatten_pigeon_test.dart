@@ -54,6 +54,10 @@ class Response {
       final tempDir = await Directory.systemTemp.createTemp(
         'pigeon_gen_cli_test_',
       );
+      addTearDown(() async {
+        await tempDir.delete(recursive: true);
+      });
+
       final targetFilePath = p.join(tempDir.path, 'messages.dart');
       final responseFile = File(p.join(tempDir.path, 'message.dart'))
         ..writeAsStringSync(messageFileContent);
@@ -67,8 +71,6 @@ class Response {
 
       final targetFileContent = File(targetFilePath).readAsStringSync();
       expect(targetFileContent, contains(expectedContent));
-
-      await tempDir.delete(recursive: true);
     });
   });
 }

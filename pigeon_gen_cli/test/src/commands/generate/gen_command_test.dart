@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 class _MockLogger extends Mock implements Logger {}
 
 void main() {
-  group('sample', () {
+  group('gen', () {
     late Logger logger;
     late PigeonGenCliCommandRunner commandRunner;
 
@@ -15,40 +15,37 @@ void main() {
       commandRunner = PigeonGenCliCommandRunner(logger: logger);
     });
 
-    test('tells a joke', () async {
-      final exitCode = await commandRunner.run(['sample']);
+    test('thorws an error when an exception is caught', () async {
+      final exitCode = await commandRunner.run([
+        'gen',
+        '-i',
+        '',
+      ]);
 
-      expect(exitCode, ExitCode.success.code);
-
+      expect(exitCode, ExitCode.software.code);
       verify(
-        () => logger.info('Which unicorn has a cold? The Achoo-nicorn!'),
-      ).called(1);
-    });
-    test('tells a joke in cyan', () async {
-      final exitCode = await commandRunner.run(['sample', '-c']);
-
-      expect(exitCode, ExitCode.success.code);
-
-      verify(
-        () => logger.info(
-          lightCyan.wrap('Which unicorn has a cold? The Achoo-nicorn!'),
+        () => logger.err(
+          any(
+            that: contains('❌ [Error]'),
+          ),
         ),
       ).called(1);
     });
 
     test('wrong usage', () async {
-      final exitCode = await commandRunner.run(['sample', '-p']);
+      final exitCode = await commandRunner.run(['gen', '-p']);
 
       expect(exitCode, ExitCode.usage.code);
 
       verify(
         () => logger.err('Could not find an option or flag "-p".'),
       ).called(1);
+
       verify(
         () => logger.info('''
-Usage: $executableName sample [arguments]
--h, --help    Print this usage information.
--c, --cyan    Prints the same joke, but in cyan
+Usage: $executableName gen [arguments]
+-h, --help                 Print this usage information.
+-i, --input (mandatory)    The input file to process and generate the flattened pigeon file
 
 Run "$executableName help" to see global options.'''),
       ).called(1);
