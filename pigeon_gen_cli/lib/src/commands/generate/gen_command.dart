@@ -42,7 +42,8 @@ class GenCommand extends Command<int> {
       final inputContent = inputFile.readAsStringSync();
       final selfContainedContent = extractPigeonFileContent(inputContent);
 
-      final externalClasses = await resolveExternalClasses(input);
+      final packageRoots = loadPackageRoots();
+      final externalClasses = await resolveExternalClasses(input, packageRoots);
 
       await generateFlattenedPigeonFile(
         selfContainedContent,

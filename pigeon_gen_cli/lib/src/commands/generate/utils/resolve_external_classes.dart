@@ -4,15 +4,16 @@ import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:path/path.dart' as p;
 import 'package:pigeon_gen_cli/src/commands/generate/utils/generate_flatten_pigeon.dart';
-import 'package:pigeon_gen_cli/src/commands/generate/utils/load_package_roots.dart';
 import 'package:yaml/yaml.dart';
 
 const _pubspecPath = 'pubspec.yaml';
 
 /// Resolves all external classes used in [entryFile] except for pigeon.
 /// Returns a map: class name -> absolute file path where it's defined.
-Future<Map<String, String>> resolveExternalClasses(String entryFile) async {
-  final packageRoots = loadPackageRoots();
+Future<Map<String, String>> resolveExternalClasses(
+  String entryFile,
+  Map<String, String> packageRoots,
+) async {
   final visitedFiles = <String>{};
   final classToFile = <String, String>{};
 
@@ -51,14 +52,9 @@ void _visitFile(
 
   // Collect local class declarations
   final declaredClasses = <String>{};
-  for (final decl in unit.declarations.where(
-    (d) => d is ClassDeclaration || d is EnumDeclaration,
-  )) {
-    final lexeme = switch (decl) {
-      final ClassDeclaration c => c.name.lexeme,
-      final EnumDeclaration e => e.name.lexeme,
-      _ => throw Exception('Unknown declaration type: ${decl.runtimeType}'),
-    };
+  for (final decl
+      in unit.declarations.whereType<NamedCompilationUnitMember>()) {
+    final lexeme = decl.name.lexeme;
     declaredClasses.add(lexeme);
 
     // Ignore classes that are part of the entry file

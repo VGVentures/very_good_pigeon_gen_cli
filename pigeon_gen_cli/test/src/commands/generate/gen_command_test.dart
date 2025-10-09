@@ -5,6 +5,7 @@ import 'package:test/test.dart';
 
 class _MockLogger extends Mock implements Logger {}
 
+// TODO(matiasleyba): add missing tests
 void main() {
   group('gen', () {
     late Logger logger;
