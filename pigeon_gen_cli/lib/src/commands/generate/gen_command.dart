@@ -75,16 +75,19 @@ class GenCommand extends Command<int> {
         ['--input', tempPigeonFile.path],
       );
 
-      final contentWithoutBaseClasses = removeClasses(
-        contentWithBaseClasses,
-        baseClasses.toList(),
-      );
       final outputFilePath = extractDartOutWithRegex(contentWithBaseClasses);
 
       if (outputFilePath == null) {
         _logger.err('❌ [Error] Could not extract dartOut from source');
         return ExitCode.software.code;
       }
+
+      final outputFileContent = File(outputFilePath).readAsStringSync();
+
+      final contentWithoutBaseClasses = removeClasses(
+        outputFileContent,
+        baseClasses.toList(),
+      );
 
       final importLinesString = importLines.join('\n');
 
