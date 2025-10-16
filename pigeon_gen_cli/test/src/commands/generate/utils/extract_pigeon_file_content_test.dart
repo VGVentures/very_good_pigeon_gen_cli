@@ -1,4 +1,4 @@
-import 'package:pigeon_gen_cli/src/commands/generate/utils/utils.dart';
+import 'package:pigeon_gen_cli/src/commands/generate_classes/utils/utils.dart';
 import 'package:test/test.dart';
 
 void main() {

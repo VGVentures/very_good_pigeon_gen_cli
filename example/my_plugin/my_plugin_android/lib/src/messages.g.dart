@@ -24,3 +24,14 @@ class Response {
 
   final TestModel2 model;
 }
+
+// <!-- start pigeonGenBaseClasses -->
+const List<Type> baseClasses = [
+  TestEnum,
+  TestModel2,
+  TestEnum1,
+  TestModel,
+  TestModel3,
+];
+
+// <!-- end pigeonGenBaseClasses -->

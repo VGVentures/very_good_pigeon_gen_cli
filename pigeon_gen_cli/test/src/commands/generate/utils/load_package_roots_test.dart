@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:pigeon_gen_cli/src/commands/generate/utils/load_package_roots.dart';
+import 'package:pigeon_gen_cli/src/commands/generate_classes/utils/load_package_roots.dart';
 import 'package:test/test.dart';
 
 // TODO(matiasleyba): fix or find a better way to handle flaky tests,

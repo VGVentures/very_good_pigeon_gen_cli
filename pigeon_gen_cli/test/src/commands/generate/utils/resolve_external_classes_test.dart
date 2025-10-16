@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:pigeon_gen_cli/src/commands/generate/utils/utils.dart';
+import 'package:pigeon_gen_cli/src/commands/generate_classes/utils/utils.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -72,9 +72,7 @@ class Package1Model {
 }
       ''');
 
-      final externalClasses = await resolveExternalClasses(inputFile.path, {
-        'package_1': package1RootDir.path,
-      });
+      final externalClasses = await resolveExternalClasses(inputFile.path);
 
       expect(externalClasses, {'Package1Model': package1ModelFile.path});
     });
@@ -158,10 +156,7 @@ class Package1Model extends Equatable {
       ''');
 
         expect(
-          () async => resolveExternalClasses(inputFile.path, {
-            'package_1': package1RootDir.path,
-            'equatable': equatableRootDir.path,
-          }),
+          () async => resolveExternalClasses(inputFile.path),
           throwsA(
             isA<Exception>().having(
               (e) => e.toString(),

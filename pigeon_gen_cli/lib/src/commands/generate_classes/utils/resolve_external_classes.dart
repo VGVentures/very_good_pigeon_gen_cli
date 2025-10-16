@@ -3,17 +3,16 @@ import 'dart:io';
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:path/path.dart' as p;
-import 'package:pigeon_gen_cli/src/commands/generate/utils/generate_flatten_pigeon.dart';
+import 'package:pigeon_gen_cli/src/commands/generate_classes/utils/utils.dart';
 import 'package:yaml/yaml.dart';
 
 const _pubspecPath = 'pubspec.yaml';
 
 /// Resolves all external classes used in [entryFile] except for pigeon.
 /// Returns a map: class name -> absolute file path where it's defined.
-Future<Map<String, String>> resolveExternalClasses(
-  String entryFile,
-  Map<String, String> packageRoots,
-) async {
+Future<Map<String, String>> resolveExternalClasses(String entryFile) async {
+  final packageRoots = loadPackageRoots();
+
   final visitedFiles = <String>{};
   final classToFile = <String, String>{};
 

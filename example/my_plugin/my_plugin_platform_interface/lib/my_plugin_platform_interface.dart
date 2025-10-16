@@ -1,8 +1,6 @@
 import 'package:my_plugin_platform_interface/src/method_channel_my_plugin.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
-export 'src/models/models.dart';
-
 /// {@template my_plugin_platform}
 /// The interface that implementations of my_plugin must implement.
 ///
