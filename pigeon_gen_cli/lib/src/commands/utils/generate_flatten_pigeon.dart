@@ -40,13 +40,6 @@ Future<void> generateFlattenedPigeonFile(
     ..writeln();
   */
 
-  /*
-  final customClasses = classToFile.keys.toSet();
-  final genPigeonFileContent = _renameCustomClasses(
-    pigeonFileContent,
-    customClasses,
-  );
-  */
   final fullContent = StringBuffer()
     //..write(header.toString())
     ..write(pigeonFileContent)
@@ -100,28 +93,10 @@ Future<void> _appendClassRecursively(
       );
     }
 
-    // Extract the full source code of this class
-    /*
-    final classSource = source.substring(decl.offset, decl.end);
-  
-    final customClasses = classToFile.keys.toSet();
-    final genClassSource = _renameCustomClasses(classSource, customClasses);
-    */
     buffer
       ..writeln(source)
       ..writeln();
   }
-}
-
-String _renameCustomClasses(String classSource, Set<String> customClasses) {
-  var source = classSource;
-  for (final customClass in customClasses) {
-    source = source.replaceAllMapped(
-      RegExp(r'\b' + RegExp.escape(customClass) + r'\b'),
-      (match) => '${customClass}Gen',
-    );
-  }
-  return source;
 }
 
 /// Collects type identifiers from AST nodes

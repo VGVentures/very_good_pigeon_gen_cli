@@ -1,12 +1,10 @@
-// ignore_for_file: leading_newlines_in_multiline_strings
-
 import 'dart:io';
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:args/command_runner.dart';
 import 'package:mason_logger/mason_logger.dart';
 import 'package:pigeon/pigeon.dart';
-import 'package:pigeon_gen_cli/src/commands/generate_classes/utils/utils.dart';
+import 'package:pigeon_gen_cli/src/commands/utils/utils.dart';
 
 /// {@template gen_classes_command}
 ///
@@ -50,44 +48,21 @@ class GenClassesCommand extends Command<int> {
       final output = argResults?['output'] as String;
 
       _logger.info('Processing input: $input');
-      _logger.info('Processing output: $output');
 
-      final inputFile = File(input);
-      final originalInputContent = inputFile.readAsStringSync();
-
-      await generatePigeonFile(input, output);
-
-      final outputFile = File(output);
-      final outputContent = outputFile.readAsStringSync();
-
-      final classes = extractClassNames(originalInputContent);
-
-      final (renamedOutputContent, newClasses) = _renameCustomClasses(
-        originalInputContent,
-        classes,
+      final outputPigeonDataClassesFile = await generatePigeonFile(
+        input,
+        output,
       );
+      final outputContent = outputPigeonDataClassesFile.readAsStringSync();
 
-      final newClassesConst =
-          'const List<Type> baseClasses = [${newClasses.join(', ')}];';
-      outputFile.writeAsStringSync(
-        '''
-        // <!-- start pigeonGenClasses -->
-        $outputContent
-        // <!-- end pigeonGenClasses -->
-        // <!-- start pigeonGenBaseClasses -->
-        $newClassesConst
-        \n
-        $renamedOutputContent
-        // <!-- end pigeonGenBaseClasses -->
-        ''',
-      );
+      // final newClassesConst =
+      //   'const List<Type> baseClasses = [${newClasses.join(', ')}];';
+      outputPigeonDataClassesFile.writeAsStringSync(outputContent);
 
       // Format file
-      await formatDartFile(outputFile.path);
+      await formatDartFile(outputPigeonDataClassesFile.path);
 
-      _logger.success(
-        '[Success] Generated Pigeon classes file: $output ✅',
-      );
+      _logger.success('[Success] Generated Pigeon classes file: $output ✅');
 
       return ExitCode.success.code;
     } on Exception catch (e) {
@@ -97,19 +72,16 @@ class GenClassesCommand extends Command<int> {
   }
 }
 
-Future<void> formatDartFile(String filePath) async => Process.run(
-  'dart',
-  ['format', filePath],
-  runInShell: true,
-);
-
-Future<void> generatePigeonFile(String input, String output) async {
+/// Generates a Pigeon data classes file from the given input file.
+Future<File> generatePigeonFile(String input, String output) async {
   final inputFile = File(input);
   var inputContent = inputFile.readAsStringSync();
   final currentPackageName = getPackageNameByPath(input);
 
   /// Append PigeonConfiguration to the input content
   inputContent =
+      // Improves readability
+      // ignore: leading_newlines_in_multiline_strings
       '''import 'package:pigeon/pigeon.dart';
 
 @ConfigurePigeon(
@@ -131,42 +103,13 @@ $inputContent
   final outputFile = File(output);
   var outputContent = outputFile.readAsStringSync();
 
+  /// Remove everything but pigeon data classes
   outputContent = removeClasses(outputContent, ['_PigeonCodec']);
   outputContent = removeAllImports(outputContent);
 
   outputFile.writeAsStringSync(outputContent);
-}
 
-(String, Set<String>) _renameCustomClasses(
-  String classSource,
-  Set<String> classes,
-) {
-  var source = classSource;
-  final newClasses = <String>{};
-  for (final customClass in classes) {
-    final newName = '${customClass}PigeonGenBaseClass';
-    source = source.replaceAllMapped(
-      RegExp(r'\b' + RegExp.escape(customClass) + r'\b'),
-      (match) => newName,
-    );
-    newClasses.add(newName);
-  }
-  return (source, newClasses);
-}
-
-/// Returns a list of all class names in the given Dart source
-Set<String> extractClassNames(String source) {
-  final result = parseString(content: source, throwIfDiagnostics: false);
-  final unit = result.unit;
-
-  final classNames = <String>[];
-
-  for (final decl
-      in unit.declarations.whereType<NamedCompilationUnitMember>()) {
-    classNames.add(decl.name.lexeme);
-  }
-
-  return classNames.toSet();
+  return outputFile;
 }
 
 /// Removes classes with the given [classNames] from the Dart [source].
@@ -175,20 +118,20 @@ String removeClasses(String source, List<String> classNames) {
   final unit = parseResult.unit;
 
   // Collect ranges to remove
-  final ranges = <_Range>[];
+  final ranges = <(int start, int end)>[];
 
   for (final decl
       in unit.declarations.whereType<NamedCompilationUnitMember>()) {
     if (classNames.contains(decl.name.lexeme)) {
       // Remove from start of the class declaration to the end
-      ranges.add(_Range(start: decl.offset, end: decl.end));
+      ranges.add((decl.offset, decl.end));
     }
   }
 
   // Apply removals from end to start to preserve offsets
   var updatedSource = source;
   for (final range in ranges.reversed) {
-    updatedSource = updatedSource.replaceRange(range.start, range.end, '');
+    updatedSource = updatedSource.replaceRange(range.$1, range.$2, '');
   }
 
   return updatedSource;
@@ -200,7 +143,7 @@ String removeAllImports(String source) {
   final unit = parseResult.unit;
   final lineInfo = parseResult.lineInfo;
 
-  final ranges = <_Range>[];
+  final ranges = <(int start, int end)>[];
 
   for (final directive in unit.directives.whereType<ImportDirective>()) {
     final startLine = lineInfo.getLocation(directive.offset).lineNumber - 1;
@@ -213,21 +156,14 @@ String removeAllImports(String source) {
         ? lineInfo.getOffsetOfLine(endLine + 1)
         : source.length;
 
-    ranges.add(_Range(start: startOffset, end: endOffset));
+    ranges.add((startOffset, endOffset));
   }
 
   // Apply removals from end to start to preserve offsets
   var updatedSource = source;
   for (final range in ranges.reversed) {
-    updatedSource = updatedSource.replaceRange(range.start, range.end, '');
+    updatedSource = updatedSource.replaceRange(range.$1, range.$2, '');
   }
 
   return updatedSource;
-}
-
-class _Range {
-  _Range({required this.start, required this.end});
-
-  final int start;
-  final int end;
 }

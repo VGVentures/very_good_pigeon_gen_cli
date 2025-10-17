@@ -8,6 +8,7 @@ import 'package:mason_logger/mason_logger.dart';
 import 'package:pigeon/pigeon.dart';
 import 'package:pigeon_gen_cli/src/commands/generate_classes/gen_classes_command.dart';
 import 'package:pigeon_gen_cli/src/commands/generate_classes/utils/utils.dart';
+import 'package:pigeon_gen_cli/src/commands/utils/utils.dart';
 
 /// {@template gen_command}
 ///
@@ -47,10 +48,17 @@ class GenCommand extends Command<int> {
       final importLines = extractImportLinesExcludingPigeon(
         originalInputContent,
       );
+      final importLinesString = importLines.join('\n');
+
       final pigeonFileContent = extractPigeonFileContent(originalInputContent);
 
       final externalClasses = await resolveExternalClasses(input);
       final tempPigeonFile = File(input.replaceAll('.dart', '.g.dart'));
+
+      final generatedClasses = externalClasses.keys
+          .toList()
+          .where((element) => !element.contains('_deepEquals'))
+          .toList();
 
       await generateFlattenedPigeonFile(
         pigeonFileContent,
@@ -59,42 +67,38 @@ class GenCommand extends Command<int> {
       );
       final tempPigeonFileContent = tempPigeonFile.readAsStringSync();
 
-      final contentWithoutGenClasses = removeSectionByTags(
+      final formattedPigeonClassesFileContent = removeGeneratedMembers(
         tempPigeonFileContent,
-        sectionName: 'pigeonGenClasses',
       );
-      final contentWithBaseClasses = renameBaseClassesToClasses(
-        contentWithoutGenClasses,
+      tempPigeonFile.writeAsStringSync(formattedPigeonClassesFileContent);
+
+      // Run Pigeon with generated classes
+      await Pigeon.run(['--input', tempPigeonFile.path]);
+
+      final outputFilePath = extractDartOutWithRegex(
+        formattedPigeonClassesFileContent,
       );
-
-      final baseClasses = extractBaseClasses(contentWithBaseClasses);
-
-      tempPigeonFile.writeAsStringSync(contentWithBaseClasses);
-
-      await Pigeon.run(
-        ['--input', tempPigeonFile.path],
-      );
-
-      final outputFilePath = extractDartOutWithRegex(contentWithBaseClasses);
 
       if (outputFilePath == null) {
         _logger.err('❌ [Error] Could not extract dartOut from source');
         return ExitCode.software.code;
       }
+      final outputFile = File(outputFilePath);
+      final outputFileContent = outputFile.readAsStringSync();
 
-      final outputFileContent = File(outputFilePath).readAsStringSync();
-
-      final contentWithoutBaseClasses = removeClasses(
+      final contentWithoutGeneratedClasses = removeClasses(
         outputFileContent,
-        baseClasses.toList(),
+        generatedClasses,
       );
 
-      final importLinesString = importLines.join('\n');
+      outputFile.writeAsStringSync(contentWithoutGeneratedClasses);
 
-      File(outputFilePath).writeAsStringSync('''
-      $importLinesString
-      $contentWithoutBaseClasses
-      ''');
+      final contentWithImportLines = insertContent(
+        contentWithoutGeneratedClasses,
+        importLinesString,
+        4,
+      );
+      outputFile.writeAsStringSync(contentWithImportLines);
 
       await tempPigeonFile.delete();
       await formatDartFile(outputFilePath);
@@ -109,68 +113,73 @@ class GenCommand extends Command<int> {
   }
 }
 
-/// Removes everything between start and end markers in [source].
-///
-/// [sectionName] is the name used in the marker, e.g., "basePigeonClasses".
-/// If [keepTags] is true, the start/end tags themselves are kept; otherwise they are removed.
-String removeSectionByTags(
-  String source, {
-  required String sectionName,
-  bool keepTags = false,
-}) {
-  final startMarker = '// <!-- start $sectionName -->';
-  final endMarker = '// <!-- end $sectionName -->';
-
-  final startIndex = source.indexOf(startMarker);
-  final endIndex = source.indexOf(endMarker);
-
-  if (startIndex == -1 || endIndex == -1 || endIndex < startIndex) {
-    // Section not found, return original source
-    return source;
-  }
-
-  final startRemoval = keepTags ? startIndex + startMarker.length : startIndex;
-  final endRemoval = keepTags ? endIndex : endIndex + endMarker.length;
-
-  return source.replaceRange(startRemoval, endRemoval, '');
+String insertContent(String source, String content, int lineNumber) {
+  final lines = source.split('\n')..insert(lineNumber, content);
+  return lines.join('\n');
 }
 
-String renameBaseClassesToClasses(String content) {
-  /// Remove everything that matches the pattern 'PigeonGenBaseClass'
-  return content.replaceAll('PigeonGenBaseClass', '');
-}
+/// Removes `_toList`, `decode`, `operator ==`, and `hashCode` members
+/// from all class declarations in the provided [source].
+String removeGeneratedMembers(String source) {
+  final parseResult = parseString(content: source, throwIfDiagnostics: false);
+  final unit = parseResult.unit;
+  final buffer = StringBuffer();
+  var lastIndex = 0;
 
-Set<String> extractBaseClasses(String content) {
-  // Looks for:
-  // const List<Type> baseClasses = [
-  //   SomeClass,
-  //   AnotherClass,
-  //   ...,
-  // ];
-  final baseClassesPattern = RegExp(
-    r'const\s+List<Type>\s+baseClasses\s*=\s*\[(.*?)\];',
-    multiLine: true,
-    dotAll: true,
-  );
-  final match = baseClassesPattern.firstMatch(content);
-  if (match == null) {
-    return <String>{};
-  }
-  final classesBlock = match.group(1);
+  // Helper: record the offset ranges of members to remove
+  final rangesToRemove = <(int, int)>[];
 
-  if (classesBlock == null) {
-    return <String>{};
+  /// Remove _deepEquals()
+  for (final decl in unit.declarations.whereType<FunctionDeclaration>()) {
+    if (decl.name.lexeme == '_deepEquals') {
+      rangesToRemove.add((decl.offset, decl.end));
+    }
   }
 
-  // Split entries, remove whitespace/comments/trailing commas
-  final lines = classesBlock
-      .split(',')
-      .map((l) => l.trim())
-      .where((l) => l.isNotEmpty)
-      .map((l) => l.replaceAll(',', '').trim())
-      .where((l) => l.isNotEmpty);
+  for (final decl in unit.declarations.whereType<ClassDeclaration>()) {
+    for (final member in decl.members) {
+      var shouldRemove = false;
 
-  return Set<String>.from(lines);
+      // Remove private _toList() method
+      if (member is MethodDeclaration && member.name.lexeme == '_toList') {
+        shouldRemove = true;
+      }
+      // Remove static decode()
+      else if (member is MethodDeclaration &&
+          member.name.lexeme == 'decode' &&
+          member.isStatic) {
+        shouldRemove = true;
+      }
+      // Remove  encode()
+      else if (member is MethodDeclaration && member.name.lexeme == 'encode') {
+        shouldRemove = true;
+      }
+      // Remove operator ==
+      else if (member is MethodDeclaration && member.name.lexeme == '==') {
+        shouldRemove = true;
+      }
+      // Remove hashCode getter
+      else if (member is MethodDeclaration &&
+          member.isGetter &&
+          member.name.lexeme == 'hashCode') {
+        shouldRemove = true;
+      }
+
+      if (shouldRemove) {
+        rangesToRemove.add((member.offset, member.end));
+      }
+    }
+  }
+
+  // Build the new source, skipping removed ranges
+  for (final range in rangesToRemove) {
+    final (start, end) = range;
+    buffer.write(source.substring(lastIndex, start));
+    lastIndex = end;
+  }
+  buffer.write(source.substring(lastIndex));
+
+  return buffer.toString();
 }
 
 /// Extracts the `dartOut` value from a PigeonOptions declaration in Dart [source].
